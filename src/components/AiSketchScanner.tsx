@@ -16,19 +16,27 @@ import {
   Droplets,
   Layers,
   ChevronRight,
+  Crown,
 } from 'lucide-react';
-import { AISketchAnalysisResult, Room } from '../types';
+import { AISketchAnalysisResult, Room, SubscriptionState } from '../types';
 import { SAMPLE_SKETCHES } from '../utils/sampleSketches';
 import { recalculateRoomGeometry } from '../utils/calculations';
+import { getAiQuotaInfo } from '../utils/storage';
 
 interface Props {
+  subscription: SubscriptionState;
   onApplyAnalysisToOffer: (rooms: Room[], notes: string) => void;
   onNavigateToGuidelines: () => void;
+  onOpenSubscriptionModal: () => void;
+  onAiAnalysisPerformed: () => void;
 }
 
 export const AiSketchScanner: React.FC<Props> = ({
+  subscription,
   onApplyAnalysisToOffer,
   onNavigateToGuidelines,
+  onOpenSubscriptionModal,
+  onAiAnalysisPerformed,
 }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(SAMPLE_SKETCHES[0].dataUrl);
   const [mimeType, setMimeType] = useState<string>('image/svg+xml');
@@ -74,6 +82,14 @@ export const AiSketchScanner: React.FC<Props> = ({
       return;
     }
 
+    const quota = getAiQuotaInfo(subscription);
+    if (!quota.hasRemaining) {
+      setError(
+        `Iskoristili ste sve AI analize za ovaj mjesec (${quota.used}/${quota.limit}). Za dodatne analize odaberite AI Pro (30 analiza) ili AI Business (70 analiza).`
+      );
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -96,6 +112,7 @@ export const AiSketchScanner: React.FC<Props> = ({
 
       const data: AISketchAnalysisResult = await response.json();
       setResult(data);
+      onAiAnalysisPerformed();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Došlo je do pogreške.';
       setError(message);
@@ -194,7 +211,39 @@ export const AiSketchScanner: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Main Grid: Upload & Controls */}
+      {/* AI Quota Meter */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white text-sm">Mjesečna kvota AI analiza:</span>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-slate-700">
+                {getAiQuotaInfo(subscription).used} / {getAiQuotaInfo(subscription).limit} iskorišteno
+              </span>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-orange-600/20 text-orange-400 border border-orange-500/30">
+                {subscription.planName || 'Free'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {getAiQuotaInfo(subscription).remaining > 0
+                ? `Imate još ${getAiQuotaInfo(subscription).remaining} preostalih analiza skica za ovaj mjesec.`
+                : 'Iskoristili ste sve besplatne analize za ovaj mjesec. Nadogradite paket za nastavak rada.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenSubscriptionModal}
+          className="px-3.5 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+        >
+          <Crown className="w-3.5 h-3.5 text-amber-200" />
+          <span>{subscription.plan === 'business' ? 'Upravljaj kvotom' : 'Više analiza (AI Pro / Business)'}</span>
+        </button>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Image input & preview (7 cols) */}
         <div className="lg:col-span-7 space-y-4">

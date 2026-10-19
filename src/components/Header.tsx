@@ -10,8 +10,11 @@ import {
   Menu,
   X,
   Layers,
+  Crown,
 } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { SubscriptionState } from '../types';
+import { getAiQuotaInfo, PLANS_CONFIG } from '../utils/storage';
 
 export type NavTab = 'offers' | 'editor' | 'scanner' | 'guidelines' | 'pricing';
 
@@ -20,6 +23,8 @@ interface Props {
   onSelectTab: (tab: NavTab) => void;
   onNewOffer: () => void;
   onOpenInstallModal: () => void;
+  onOpenSubscriptionModal: () => void;
+  subscription: SubscriptionState;
   offersCount: number;
 }
 
@@ -28,10 +33,14 @@ export const Header: React.FC<Props> = ({
   onSelectTab,
   onNewOffer,
   onOpenInstallModal,
+  onOpenSubscriptionModal,
+  subscription,
   offersCount,
 }) => {
   const { isInstallable, isInstalled, isIOS } = usePWAInstall();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const quota = getAiQuotaInfo(subscription);
+  const currentPlanConfig = PLANS_CONFIG[subscription.plan] || PLANS_CONFIG.free;
 
   const navItems: Array<{ id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }> = [
     { id: 'offers', label: 'Ponude', icon: FileText, badge: offersCount },
@@ -105,16 +114,35 @@ export const Header: React.FC<Props> = ({
           </nav>
 
           {/* Actions & PWA Install */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            {/* Subscription status badge */}
+            <button
+              onClick={onOpenSubscriptionModal}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                subscription.plan === 'business'
+                  ? 'bg-amber-950/80 hover:bg-amber-900 border-amber-500/50 text-amber-300'
+                  : subscription.plan === 'pro'
+                  ? 'bg-orange-950/80 hover:bg-orange-900 border-orange-500/50 text-orange-300'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
+              }`}
+              title="Paketi i status AI kvote"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>{currentPlanConfig.name}</span>
+              <span className="text-[10px] font-mono font-normal opacity-80 hidden sm:inline">
+                ({quota.used}/{quota.limit} AI)
+              </span>
+            </button>
+
             {/* Install Button */}
             {!isInstalled && (
               <button
                 onClick={onOpenInstallModal}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition hover:border-orange-500/50"
+                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition hover:border-orange-500/50"
                 title="Instaliraj na telefon ili računalo"
               >
                 <Smartphone className="w-3.5 h-3.5 text-orange-400" />
-                <span>{isIOS ? 'Instaliraj na iPhone' : isInstallable ? 'Instaliraj App' : 'Mobilna App'}</span>
+                <span>{isIOS ? 'iPhone App' : isInstallable ? 'Instaliraj App' : 'Mobilna App'}</span>
               </button>
             )}
 
@@ -146,6 +174,25 @@ export const Header: React.FC<Props> = ({
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-800 bg-slate-900 px-4 pt-2 pb-4 space-y-1">
+          {/* Subscription Banner in Mobile Drawer */}
+          <button
+            onClick={() => {
+              onOpenSubscriptionModal();
+              setMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-950/50 to-orange-950/50 border border-amber-500/30 text-amber-300 mb-2 cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Crown className="w-4 h-4 text-amber-400" />
+              <span>
+                Paket: {currentPlanConfig.name} • AI analize ({quota.used}/{quota.limit})
+              </span>
+            </div>
+            <span className="text-orange-400 font-mono">
+              {currentPlanConfig.price > 0 ? `${currentPlanConfig.price.toFixed(2)} €/mj` : 'Besplatno'}
+            </span>
+          </button>
+
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;

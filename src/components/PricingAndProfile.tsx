@@ -13,9 +13,30 @@ import {
   Download,
   Upload,
   Database,
+  Crown,
+  Clock,
+  Sparkles,
+  AlertTriangle,
+  Receipt,
+  CreditCard,
+  CheckCircle2,
+  Trash2,
+  Image as ImageIcon,
+  Zap,
+  FileSpreadsheet,
+  Briefcase,
 } from 'lucide-react';
-import { PricingSettings, CraftsmanProfile, Offer } from '../types';
-import { DEFAULT_PRICING, DEFAULT_PROFILE } from '../utils/storage';
+import { PricingSettings, CraftsmanProfile, Offer, SubscriptionState } from '../types';
+import {
+  DEFAULT_PRICING,
+  DEFAULT_PROFILE,
+  loadInvoices,
+  PLANS_CONFIG,
+  getAiQuotaInfo,
+  resetAiQuota,
+  simulateAiQuotaExhausted,
+  activatePlan,
+} from '../utils/storage';
 
 interface Props {
   pricing: PricingSettings;
@@ -24,6 +45,9 @@ interface Props {
   onSaveProfile: (profile: CraftsmanProfile) => void;
   offers?: Offer[];
   onRestoreOffers?: (offers: Offer[]) => void;
+  subscription: SubscriptionState;
+  onOpenSubscriptionModal: () => void;
+  onSubscriptionUpdated: (updated: SubscriptionState) => void;
 }
 
 export const PricingAndProfile: React.FC<Props> = ({
@@ -33,11 +57,15 @@ export const PricingAndProfile: React.FC<Props> = ({
   onSaveProfile,
   offers = [],
   onRestoreOffers,
+  subscription,
+  onOpenSubscriptionModal,
+  onSubscriptionUpdated,
 }) => {
   const [pricing, setPricing] = useState<PricingSettings>(initialPricing);
   const [profile, setProfile] = useState<CraftsmanProfile>(initialProfile);
-  const [activeTab, setActiveTab] = useState<'pricing' | 'profile'>('pricing');
+  const [activeTab, setActiveTab] = useState<'pricing' | 'profile' | 'subscription'>('pricing');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
 
   const handlePricingChange = (key: keyof PricingSettings, value: number) => {
     setPricing((prev) => ({ ...prev, [key]: value }));
@@ -96,10 +124,10 @@ export const PricingAndProfile: React.FC<Props> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('pricing')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
             activeTab === 'pricing'
               ? 'bg-orange-600 text-white shadow-md'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -111,7 +139,7 @@ export const PricingAndProfile: React.FC<Props> = ({
 
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
             activeTab === 'profile'
               ? 'bg-orange-600 text-white shadow-md'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -119,6 +147,18 @@ export const PricingAndProfile: React.FC<Props> = ({
         >
           <Building className="w-4 h-4" />
           <span>Podaci o Obrtu / Firmi & PDV</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('subscription')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
+            activeTab === 'subscription'
+              ? 'bg-orange-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Crown className="w-4 h-4 text-amber-400" />
+          <span>Pretplata & Licenca (10 €/mj)</span>
         </button>
       </div>
 
@@ -434,8 +474,74 @@ export const PricingAndProfile: React.FC<Props> = ({
               Službeni podaci izvođača za zaglavlje ponuda
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Ovi podaci pojavit će se na vrhu svakog predračuna i ponude koju pošaljete klijentu.
+              Ovi podaci i logotip pojavit će se na vrhu svakog predračuna i ponude.
             </p>
+          </div>
+
+          {/* Logo uploader */}
+          <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {profile.logoUrl ? (
+                <div className="w-16 h-16 rounded-xl bg-white p-1 border border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+                  <img src={profile.logoUrl} alt="Logo obrta" className="max-w-full max-h-full object-contain" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-xl bg-slate-800 border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500 shrink-0">
+                  <ImageIcon className="w-6 h-6 text-slate-400" />
+                  <span className="text-[9px] mt-0.5">Bez loga</span>
+                </div>
+              )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bold text-white text-sm">Logotip obrta / tvrtke za PDF ponude</h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-600/20 text-orange-400 border border-orange-500/30">
+                    AI Pro & Business
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Učitajte sliku vašeg logotipa (PNG, JPG) koja se automatski ispisuje na vrhu svake PDF ponude.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <label className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition flex items-center gap-1.5">
+                <Upload className="w-3.5 h-3.5 text-orange-400" />
+                <span>{profile.logoUrl ? 'Promijeni logo' : 'Učitaj logo'}</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const base64 = ev.target?.result as string;
+                      handleProfileChange('logoUrl', base64);
+                      setNoticeMessage('Logotip je uspješno učitan!');
+                      setTimeout(() => setNoticeMessage(null), 3000);
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+
+              {profile.logoUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleProfileChange('logoUrl', '');
+                    setNoticeMessage('Logotip je uklonjen.');
+                    setTimeout(() => setNoticeMessage(null), 3000);
+                  }}
+                  className="p-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded-lg text-xs transition"
+                  title="Ukloni logo"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -630,9 +736,11 @@ export const PricingAndProfile: React.FC<Props> = ({
                         if (Array.isArray(parsed.offers) && onRestoreOffers) {
                           onRestoreOffers(parsed.offers);
                         }
-                        alert('Sigurnosna kopija je uspješno učitana!');
+                        setNoticeMessage('Sigurnosna kopija je uspješno učitana!');
+                        setTimeout(() => setNoticeMessage(null), 3000);
                       } catch {
-                        alert('Datoteka sigurnosne kopije nije ispravnog JSON formata.');
+                        setNoticeMessage('Datoteka sigurnosne kopije nije ispravnog JSON formata.');
+                        setTimeout(() => setNoticeMessage(null), 3000);
                       }
                     };
                     reader.readAsText(file);
@@ -641,15 +749,290 @@ export const PricingAndProfile: React.FC<Props> = ({
                 />
               </label>
             </div>
+            {noticeMessage && (
+              <p className="text-xs text-emerald-400 font-semibold">{noticeMessage}</p>
+            )}
           </div>
 
           <div className="pt-2">
             <button
               onClick={handleSaveAll}
-              className="px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs sm:text-sm shadow-lg shadow-orange-600/30 transition"
+              className="px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs sm:text-sm shadow-lg shadow-orange-600/30 transition cursor-pointer"
             >
               Spremi Podatke Profila
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription & License Tab */}
+      {activeTab === 'subscription' && (
+        <div className="space-y-6">
+          {/* Main Plan Overview */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20 shrink-0">
+                  <Crown className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl sm:text-2xl font-black text-white">{subscription.planName || 'KeraKalk Paket'}</h3>
+                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-orange-600/30 text-orange-400 border border-orange-500/40">
+                      {subscription.plan === 'business' ? 'Maksimalni' : subscription.plan === 'pro' ? 'Pro Majstor' : 'Zauvijek Besplatno'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {PLANS_CONFIG[subscription.plan]?.description || 'Softver za keramičare s AI vizualnom analizom'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Pill */}
+              <div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 text-xs font-bold">
+                  <Check className="w-3.5 h-3.5" />
+                  Aktivno ({subscription.pricePerMonth.toFixed(2)} €/mj)
+                </span>
+              </div>
+            </div>
+
+            {/* AI Quota Usage Progress Bar */}
+            <div className="mt-5 bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  Mjesečna kvota AI analiza nacrta i skica:
+                </span>
+                <span className="font-mono text-slate-300">
+                  <strong className="text-white font-bold">{getAiQuotaInfo(subscription).used}</strong> / {getAiQuotaInfo(subscription).limit} iskorišteno
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 rounded-full ${
+                    getAiQuotaInfo(subscription).percentUsed >= 100
+                      ? 'bg-rose-500'
+                      : getAiQuotaInfo(subscription).percentUsed > 70
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${getAiQuotaInfo(subscription).percentUsed}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1">
+                <span>
+                  Preostalo: <strong className="text-white">{getAiQuotaInfo(subscription).remaining} analiza</strong>
+                </span>
+                <span>
+                  Obnova kvote: {new Date(subscription.monthResetDate).toLocaleDateString('hr-HR')}
+                </span>
+              </div>
+            </div>
+
+            {/* 3 Packages Mini-Cards */}
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {/* Free */}
+              <div
+                className={`p-4 rounded-xl border text-xs flex flex-col justify-between ${
+                  subscription.plan === 'free'
+                    ? 'bg-slate-800/80 border-orange-500 ring-1 ring-orange-500'
+                    : 'bg-slate-950/50 border-slate-800'
+                }`}
+              >
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <strong className="text-white">{PLANS_CONFIG.free.name}</strong>
+                    <span className="font-bold text-slate-400">0 €</span>
+                  </div>
+                  <p className="text-slate-400 text-[11px]">2 AI analize mjesečno, ručni unos, jednostavna ponuda.</p>
+                </div>
+                {subscription.plan === 'free' ? (
+                  <span className="mt-3 text-[11px] text-emerald-400 font-bold block">✓ Vaš trenutni paket</span>
+                ) : (
+                  <button
+                    onClick={onOpenSubscriptionModal}
+                    className="mt-3 text-[11px] text-orange-400 hover:underline font-semibold text-left"
+                  >
+                    Odaberi Free →
+                  </button>
+                )}
+              </div>
+
+              {/* AI Pro */}
+              <div
+                className={`p-4 rounded-xl border text-xs flex flex-col justify-between ${
+                  subscription.plan === 'pro'
+                    ? 'bg-orange-950/30 border-orange-500 ring-1 ring-orange-500'
+                    : 'bg-slate-950/50 border-slate-800'
+                }`}
+              >
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <strong className="text-white">{PLANS_CONFIG.pro.name}</strong>
+                    <span className="font-bold text-orange-400">9,99 €/mj</span>
+                  </div>
+                  <p className="text-slate-400 text-[11px]">30 AI analiza, PDF ponude s logom, do 25 projekata.</p>
+                </div>
+                {subscription.plan === 'pro' ? (
+                  <span className="mt-3 text-[11px] text-emerald-400 font-bold block">✓ Vaš trenutni paket</span>
+                ) : (
+                  <button
+                    onClick={onOpenSubscriptionModal}
+                    className="mt-3 text-[11px] text-orange-400 hover:underline font-semibold text-left"
+                  >
+                    Nadogradi na AI Pro →
+                  </button>
+                )}
+              </div>
+
+              {/* AI Business */}
+              <div
+                className={`p-4 rounded-xl border text-xs flex flex-col justify-between ${
+                  subscription.plan === 'business'
+                    ? 'bg-amber-950/30 border-amber-500 ring-1 ring-amber-500'
+                    : 'bg-slate-950/50 border-slate-800'
+                }`}
+              >
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <strong className="text-white">{PLANS_CONFIG.business.name}</strong>
+                    <span className="font-bold text-amber-400">19,99 €/mj</span>
+                  </div>
+                  <p className="text-slate-400 text-[11px]">70 AI analiza, Excel izvoz, neograničeni projekti.</p>
+                </div>
+                {subscription.plan === 'business' ? (
+                  <span className="mt-3 text-[11px] text-emerald-400 font-bold block">✓ Vaš trenutni paket</span>
+                ) : (
+                  <button
+                    onClick={onOpenSubscriptionModal}
+                    className="mt-3 text-[11px] text-amber-400 hover:underline font-semibold text-left"
+                  >
+                    Nadogradi na AI Business →
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                onClick={onOpenSubscriptionModal}
+                className="px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-orange-600/30 flex items-center gap-2 transition transform active:scale-95 cursor-pointer"
+              >
+                <Crown className="w-4 h-4" />
+                <span>Promijeni paket ili upravljaj pretplatom</span>
+              </button>
+            </div>
+          </div>
+
+          {/* R1 Invoices Section */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-orange-400" />
+                <span>Povijest R1 računa za pretplatu</span>
+              </h3>
+              <span className="text-xs text-slate-400">Priznati trošak u knjigovodstvu</span>
+            </div>
+
+            {loadInvoices().length > 0 ? (
+              <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
+                {loadInvoices().map((inv) => (
+                  <div key={inv.id} className="p-3.5 flex items-center justify-between text-xs">
+                    <div>
+                      <strong className="text-white block text-sm">{inv.invoiceNumber}</strong>
+                      <span className="text-slate-400 text-[11px]">
+                        Datum: {inv.date} • Način: {inv.paymentMethod}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-black text-white text-sm font-mono">
+                        {inv.amount.toFixed(2)} €
+                      </span>
+                      <span className="text-[10px] text-emerald-400 block font-bold">Plaćeno</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 italic">
+                Trenutno nema izdanih računa. Nakon aktivacije pretplate AI Pro ili AI Business ovdje će se nalaziti svi vaši R1 računi.
+              </p>
+            )}
+          </div>
+
+          {/* Testing tools */}
+          <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 text-xs space-y-2">
+            <span className="font-bold text-slate-300 block">
+              🧪 Testiranje paketa i AI kvota (Simulator):
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = activatePlan('free');
+                  onSubscriptionUpdated(updated);
+                  setNoticeMessage('Postavljeno na Free (zauvijek).');
+                  setTimeout(() => setNoticeMessage(null), 3000);
+                }}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition"
+              >
+                Postavi na Free (0 €)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = activatePlan('pro');
+                  onSubscriptionUpdated(updated);
+                  setNoticeMessage('Postavljeno na AI Pro (9,99 €/mj).');
+                  setTimeout(() => setNoticeMessage(null), 3000);
+                }}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-orange-300 rounded-lg border border-slate-700 transition"
+              >
+                Postavi na AI Pro (9,99 €)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = activatePlan('business');
+                  onSubscriptionUpdated(updated);
+                  setNoticeMessage('Postavljeno na AI Business (19,99 €/mj).');
+                  setTimeout(() => setNoticeMessage(null), 3000);
+                }}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg border border-slate-700 transition"
+              >
+                Postavi na AI Business (19,99 €)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = simulateAiQuotaExhausted();
+                  onSubscriptionUpdated(updated);
+                  setNoticeMessage('Simulirana potrošena AI kvota.');
+                  setTimeout(() => setNoticeMessage(null), 3000);
+                }}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-lg border border-slate-700 transition"
+              >
+                Simuliraj potrošenu AI kvotu
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = resetAiQuota();
+                  onSubscriptionUpdated(updated);
+                  setNoticeMessage('AI kvota resetirana na 0.');
+                  setTimeout(() => setNoticeMessage(null), 3000);
+                }}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg border border-slate-700 flex items-center gap-1.5 transition"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Resetiraj AI kvotu
+              </button>
+            </div>
+            {noticeMessage && (
+              <p className="text-xs text-emerald-400 font-semibold pt-1">{noticeMessage}</p>
+            )}
           </div>
         </div>
       )}

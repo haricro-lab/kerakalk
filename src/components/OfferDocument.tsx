@@ -18,23 +18,29 @@ import {
   FileCheck,
   CheckCircle2,
   RefreshCw,
+  FileSpreadsheet,
 } from 'lucide-react';
-import { Offer, CraftsmanProfile, PricingSettings } from '../types';
+import { Offer, CraftsmanProfile, PricingSettings, SubscriptionState } from '../types';
+import { downloadOfferExcel } from '../utils/excelExport';
 
 interface Props {
   offer: Offer;
   profile: CraftsmanProfile;
   pricing: PricingSettings;
+  subscription: SubscriptionState;
   onBackToEdit: () => void;
   onUpdateStatus: (status: Offer['status']) => void;
+  onOpenSubscriptionModal?: () => void;
 }
 
 export const OfferDocument: React.FC<Props> = ({
   offer,
   profile,
   pricing,
+  subscription,
   onBackToEdit,
   onUpdateStatus,
+  onOpenSubscriptionModal,
 }) => {
   const [copied, setCopied] = useState(false);
   const [aiMessageOpen, setAiMessageOpen] = useState(false);
@@ -385,16 +391,41 @@ export const OfferDocument: React.FC<Props> = ({
 
           <button
             onClick={copyWhatsApp}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold shadow-md transition"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold shadow-md transition cursor-pointer"
           >
             <MessageCircle className="w-4 h-4" />
             <span>WhatsApp</span>
           </button>
 
+          {/* Excel Export Button (AI Business Feature) */}
+          <button
+            onClick={() => {
+              if (subscription.plan === 'business') {
+                downloadOfferExcel(offer, profile, pricing);
+              } else if (onOpenSubscriptionModal) {
+                onOpenSubscriptionModal();
+              }
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-semibold shadow-md transition cursor-pointer"
+            title={
+              subscription.plan === 'business'
+                ? 'Preuzmite kompletan troškovnik u Excel (.csv) formatu'
+                : 'Excel izvoz je dostupan u AI Business paketu (19,99 €/mj)'
+            }
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+            <span>Excel Izvoz</span>
+            {subscription.plan !== 'business' && (
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-200 ml-1">
+                Business
+              </span>
+            )}
+          </button>
+
           <button
             onClick={handleDownloadPdf}
             disabled={pdfGenerating}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition transform active:scale-95 ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition transform active:scale-95 cursor-pointer ${
               pdfGenerating
                 ? 'bg-slate-700 text-slate-300 cursor-wait'
                 : 'bg-gradient-to-r from-orange-600 via-orange-500 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-orange-600/30'
@@ -416,7 +447,7 @@ export const OfferDocument: React.FC<Props> = ({
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition cursor-pointer"
             title="Ispis ili ispisni preglednik"
           >
             <Printer className="w-4 h-4 text-slate-400" />
@@ -504,15 +535,32 @@ export const OfferDocument: React.FC<Props> = ({
         {/* Document Header */}
         <div className="border-b-2 border-slate-900 pb-6 mb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
-            {/* Craftsman info */}
+            {/* Craftsman info with Logo */}
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center text-white font-black text-sm">
-                  K
+              <div className="flex items-center gap-3 mb-2">
+                {profile.logoUrl && subscription.plan !== 'free' ? (
+                  <div className="h-12 max-w-[180px] flex items-center shrink-0">
+                    <img
+                      src={profile.logoUrl}
+                      alt={profile.companyName || 'Logo obrta'}
+                      className="max-h-12 max-w-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-600 to-amber-600 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
+                    K
+                  </div>
+                )}
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight text-slate-950 uppercase leading-tight">
+                    {profile.companyName || 'Keramičarski Obrt'}
+                  </h2>
+                  {profile.logoUrl && subscription.plan === 'free' && (
+                    <span className="print:hidden text-[10px] text-orange-600 font-semibold block">
+                      (Vlastiti logo na PDF ponudi uključen je u AI Pro paket)
+                    </span>
+                  )}
                 </div>
-                <h2 className="text-2xl font-black tracking-tight text-slate-950 uppercase">
-                  {profile.companyName || 'Keramičarski Obrt'}
-                </h2>
               </div>
               <p className="text-xs text-slate-600 font-medium">
                 Vlasnik: {profile.ownerName || 'Ovlašteni keramičar'}

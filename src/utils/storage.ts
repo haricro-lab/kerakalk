@@ -160,7 +160,288 @@ const STORAGE_KEYS = {
   PRICING: 'kerakalk_pricing_v1',
   PROFILE: 'kerakalk_profile_v1',
   OFFERS: 'kerakalk_offers_v1',
+  SUBSCRIPTION: 'kerakalk_subscription_v1',
+  INVOICES: 'kerakalk_invoices_v1',
 };
+
+import { SubscriptionState, PaymentInvoice, PlanTier, PlanConfig } from '../types';
+
+export const PLANS_CONFIG: Record<PlanTier, PlanConfig> = {
+  free: {
+    id: 'free',
+    name: 'Free (zauvijek)',
+    price: 0,
+    billingPeriod: 'zauvijek',
+    description: 'Osnovni paket za brzi ručni izračun i jednostavne ponude',
+    aiLimit: 2,
+    maxProjects: 3,
+    hasCustomLogo: false,
+    hasExcelExport: false,
+    features: [
+      'Ručni unos površina (pod, zidovi, otvori)',
+      'Broj pločica i kalkulator kutija keramike',
+      'Proračun ljepila i mase za fugiranje',
+      'Izračun postotka otpada pločica (waste)',
+      'Jednostavna ponuda za klijente',
+      '2 AI analize nacrta mjesečno',
+      'Spremanje do 3 projekta',
+    ],
+  },
+  pro: {
+    id: 'pro',
+    name: 'AI Pro',
+    badge: 'Preporučeno',
+    price: 9.99,
+    billingPeriod: 'mjesečno',
+    description: 'Za profesionalne keramičare koji šalju brendirane ponude s logom',
+    aiLimit: 30,
+    maxProjects: 25,
+    hasCustomLogo: true,
+    hasExcelExport: false,
+    features: [
+      'Sve iz Free paketa',
+      '30 AI analiza nacrta mjesečno (kamera i skica)',
+      'Službene PDF ponude s vlastitim logom obrta/tvrtke',
+      'Spremanje i upravljanje do 25 projekata',
+      'Slanje ponude na WhatsApp u 1 klik',
+      'Proračun hidroizolacije, traka, gerunga i sokla',
+      'R1 račun za porezni trošak poslovanja',
+    ],
+  },
+  business: {
+    id: 'business',
+    name: 'AI Business',
+    badge: 'Maksimalni paket',
+    price: 19.99,
+    billingPeriod: 'mjesečno',
+    description: 'Za veće obrte i firme s više majstora i gradilišta',
+    aiLimit: 70,
+    maxProjects: -1,
+    hasCustomLogo: true,
+    hasExcelExport: true,
+    features: [
+      'Sve iz AI Pro paketa',
+      '70 AI analiza nacrta mjesečno',
+      'Excel (.xlsx / .csv) detaljan izvoz troškovnika',
+      'Neograničen broj projekata i arhiva ponuda',
+      'Prioritetna AI obrada skica i tlocrta',
+      'Sigurnosni backup baze klijenata i ponuda',
+      'R1 račun za porezni odbitak obrta',
+    ],
+  },
+};
+
+export function createInitialSubscription(): SubscriptionState {
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+  return {
+    status: 'active',
+    plan: 'free',
+    planName: PLANS_CONFIG.free.name,
+    pricePerMonth: 0,
+    aiAnalysesUsedThisMonth: 0,
+    aiAnalysesLimit: PLANS_CONFIG.free.aiLimit,
+    monthResetDate: nextMonth.toISOString(),
+    autoRenew: true,
+  };
+}
+
+export function loadSubscription(): SubscriptionState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
+    if (!raw) {
+      const initial = createInitialSubscription();
+      saveSubscription(initial);
+      return initial;
+    }
+    const sub = JSON.parse(raw);
+
+    // Migracija starih formata na novi sustav s 3 paketa
+    let plan: PlanTier = 'free';
+    if (sub.plan === 'business' || sub.plan === 'AI Business') {
+      plan = 'business';
+    } else if (sub.plan === 'pro' || sub.plan === 'AI Pro' || sub.plan === 'monthly_10') {
+      plan = 'pro';
+    } else if (sub.plan === 'free') {
+      plan = 'free';
+    } else if (sub.status === 'active') {
+      plan = 'pro';
+    }
+
+    const config = PLANS_CONFIG[plan] || PLANS_CONFIG.free;
+
+    // Provjera mjesečnog reseta AI kvote
+    const now = new Date();
+    let monthResetDate = sub.monthResetDate ? new Date(sub.monthResetDate) : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    let aiUsed = typeof sub.aiAnalysesUsedThisMonth === 'number' ? sub.aiAnalysesUsedThisMonth : 0;
+
+    if (now > monthResetDate) {
+      aiUsed = 0;
+      monthResetDate = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    }
+
+    const updated: SubscriptionState = {
+      status: sub.status === 'expired' ? 'expired' : 'active',
+      plan,
+      planName: config.name,
+      pricePerMonth: config.price,
+      aiAnalysesUsedThisMonth: aiUsed,
+      aiAnalysesLimit: config.aiLimit,
+      monthResetDate: monthResetDate.toISOString(),
+      subscriptionStartDate: sub.subscriptionStartDate || now.toISOString(),
+      nextBillingDate: sub.nextBillingDate,
+      paymentMethod: sub.paymentMethod || 'card',
+      lastPaymentAmount: sub.lastPaymentAmount || config.price,
+      autoRenew: sub.autoRenew !== false,
+      trialStartDate: sub.trialStartDate,
+      trialEndDate: sub.trialEndDate,
+    };
+
+    saveSubscription(updated);
+    return updated;
+  } catch {
+    const initial = createInitialSubscription();
+    return initial;
+  }
+}
+
+export function saveSubscription(sub: SubscriptionState): void {
+  localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(sub));
+}
+
+export function getAiQuotaInfo(sub: SubscriptionState) {
+  const limit = sub.aiAnalysesLimit || PLANS_CONFIG[sub.plan]?.aiLimit || 2;
+  const used = sub.aiAnalysesUsedThisMonth || 0;
+  const remaining = Math.max(0, limit - used);
+  const percentUsed = Math.min(100, Math.round((used / limit) * 100));
+
+  return {
+    used,
+    limit,
+    remaining,
+    percentUsed,
+    hasRemaining: remaining > 0,
+  };
+}
+
+export function recordAiAnalysisUsage(): SubscriptionState {
+  const current = loadSubscription();
+  const updated: SubscriptionState = {
+    ...current,
+    aiAnalysesUsedThisMonth: (current.aiAnalysesUsedThisMonth || 0) + 1,
+  };
+  saveSubscription(updated);
+  return updated;
+}
+
+export function canCreateProject(currentCount: number, sub: SubscriptionState): { allowed: boolean; max: number } {
+  const config = PLANS_CONFIG[sub.plan] || PLANS_CONFIG.free;
+  if (config.maxProjects === -1) {
+    return { allowed: true, max: -1 };
+  }
+  return {
+    allowed: currentCount < config.maxProjects,
+    max: config.maxProjects,
+  };
+}
+
+export function activatePlan(
+  planTier: PlanTier,
+  paymentMethod: SubscriptionState['paymentMethod'] = 'card',
+  customAmount?: number
+): SubscriptionState {
+  const now = new Date();
+  const nextBilling = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const config = PLANS_CONFIG[planTier] || PLANS_CONFIG.free;
+  const amount = customAmount !== undefined ? customAmount : config.price;
+
+  const current = loadSubscription();
+  const updated: SubscriptionState = {
+    ...current,
+    status: 'active',
+    plan: planTier,
+    planName: config.name,
+    pricePerMonth: config.price,
+    aiAnalysesLimit: config.aiLimit,
+    subscriptionStartDate: now.toISOString(),
+    nextBillingDate: planTier === 'free' ? undefined : nextBilling.toISOString(),
+    paymentMethod,
+    lastPaymentAmount: amount,
+    autoRenew: true,
+  };
+
+  saveSubscription(updated);
+
+  // Ako se plaća (iznos > 0), evidentiraj službeni R1 račun
+  if (amount > 0) {
+    const invoice: PaymentInvoice = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: `R1-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: now.toISOString().split('T')[0],
+      amount,
+      currency: 'EUR',
+      planName: `${config.name} (${config.billingPeriod})`,
+      status: 'paid',
+      paymentMethod:
+        paymentMethod === 'google_pay'
+          ? 'Google Pay'
+          : paymentMethod === 'apple_pay'
+          ? 'Apple Pay'
+          : paymentMethod === 'bank_transfer'
+          ? 'Virman / Internet bankarstvo'
+          : 'Kreditna/Debitna kartica',
+    };
+
+    const existingInvoices = loadInvoices();
+    saveInvoices([invoice, ...existingInvoices]);
+  }
+
+  return updated;
+}
+
+export function cancelSubscription(): SubscriptionState {
+  const current = loadSubscription();
+  const updated: SubscriptionState = {
+    ...current,
+    autoRenew: false,
+  };
+  saveSubscription(updated);
+  return updated;
+}
+
+export function resetAiQuota(): SubscriptionState {
+  const current = loadSubscription();
+  const updated: SubscriptionState = {
+    ...current,
+    aiAnalysesUsedThisMonth: 0,
+  };
+  saveSubscription(updated);
+  return updated;
+}
+
+export function simulateAiQuotaExhausted(): SubscriptionState {
+  const current = loadSubscription();
+  const updated: SubscriptionState = {
+    ...current,
+    aiAnalysesUsedThisMonth: current.aiAnalysesLimit,
+  };
+  saveSubscription(updated);
+  return updated;
+}
+
+export function loadInvoices(): PaymentInvoice[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.INVOICES);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveInvoices(invoices: PaymentInvoice[]): void {
+  localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
+}
 
 export function loadPricing(): PricingSettings {
   try {
@@ -214,3 +495,4 @@ export function getNextOfferNumber(offers: Offer[]): string {
   const pad = count < 10 ? `0${count}` : `${count}`;
   return `${pad}/${currentYear}`;
 }
+

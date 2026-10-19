@@ -96,6 +96,7 @@ export interface CraftsmanProfile {
   defaultWarrantyYears: number;
   defaultOfferValidityDays: number;
   defaultWastePercent: number;
+  logoUrl?: string; // Base64 data URL logotipa obrta / tvrtke
 }
 
 export interface OfferTotals {
@@ -190,3 +191,48 @@ export interface AISketchGuidelines {
   photoTips: string[];
   exampleSketchDescription?: string;
 }
+
+export type PlanTier = 'free' | 'pro' | 'business';
+
+export interface PlanConfig {
+  id: PlanTier;
+  name: string;
+  badge?: string;
+  price: number;
+  billingPeriod: string;
+  description: string;
+  aiLimit: number;
+  maxProjects: number; // -1 = neograničeno
+  hasCustomLogo: boolean;
+  hasExcelExport: boolean;
+  features: string[];
+}
+
+export interface SubscriptionState {
+  status: 'active' | 'trial' | 'expired';
+  plan: PlanTier;
+  planName: string;
+  pricePerMonth: number; // 0, 9.99 ili 19.99
+  aiAnalysesUsedThisMonth: number;
+  aiAnalysesLimit: number; // 2 (Free), 30 (Pro), 70 (Business)
+  monthResetDate: string;
+  subscriptionStartDate?: string;
+  nextBillingDate?: string;
+  paymentMethod?: 'card' | 'google_pay' | 'apple_pay' | 'bank_transfer';
+  lastPaymentAmount?: number;
+  autoRenew: boolean;
+  trialStartDate?: string;
+  trialEndDate?: string;
+}
+
+export interface PaymentInvoice {
+  id: string;
+  invoiceNumber: string;
+  date: string;
+  amount: number;
+  currency: string;
+  planName: string;
+  status: 'paid' | 'pending';
+  paymentMethod: string;
+}
+
