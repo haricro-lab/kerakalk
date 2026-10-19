@@ -1,0 +1,6 @@
+{
+  "name": "KeraKalk - Keramičarski Kalkulator & Ponude",
+  "description": "Profesionalna aplikacija za keramičare: automatski izračun kvadrata i materijala, cjenik radova, ponude za klijente i AI analiza skica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

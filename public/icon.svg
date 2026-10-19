@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="tileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <!-- Tile Grid pattern -->
+  <g transform="translate(64, 64)">
+    <!-- Top-left tile -->
+    <rect x="16" y="16" width="160" height="160" rx="16" fill="#334155" stroke="#475569" stroke-width="4"/>
+    <!-- Top-right tile -->
+    <rect x="208" y="16" width="160" height="160" rx="16" fill="url(#tileGrad)" stroke="#f97316" stroke-width="4"/>
+    <!-- Bottom-left tile -->
+    <rect x="16" y="208" width="160" height="160" rx="16" fill="url(#tileGrad)" stroke="#f97316" stroke-width="4"/>
+    <!-- Bottom-right tile -->
+    <rect x="208" y="208" width="160" height="160" rx="16" fill="#334155" stroke="#475569" stroke-width="4"/>
+    <!-- Notch / Trowel / Measurement crosshair in center -->
+    <circle cx="192" cy="192" r="28" fill="#0f172a" stroke="#f97316" stroke-width="6"/>
+    <path d="M192 174 L192 210 M174 192 L210 192" stroke="#f97316" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>
