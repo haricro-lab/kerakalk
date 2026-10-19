@@ -164,7 +164,7 @@ const STORAGE_KEYS = {
   INVOICES: 'kerakalk_invoices_v1',
 };
 
-import { SubscriptionState, PaymentInvoice, PlanTier, PlanConfig } from '../types';
+import { SubscriptionState, PaymentInvoice, PlanTier, PlanConfig, AddonTier, AddonPackage } from '../types';
 
 export const PLANS_CONFIG: Record<PlanTier, PlanConfig> = {
   free: {
@@ -231,6 +231,27 @@ export const PLANS_CONFIG: Record<PlanTier, PlanConfig> = {
   },
 };
 
+export const ADDON_PACKAGES: Record<AddonTier, AddonPackage> = {
+  addon_10: {
+    id: 'addon_10',
+    name: 'Dodatni paket 10 AI analiza',
+    analysesCount: 10,
+    price: 2.99,
+    unitPrice: '0,30 € / analizi',
+    badge: 'Popularno',
+    description: '10 dodatnih analiza nacrta i skica, jednokratno bez ugovorne obveze',
+  },
+  addon_25: {
+    id: 'addon_25',
+    name: 'Dodatni paket 25 AI analiza',
+    analysesCount: 25,
+    price: 5.99,
+    unitPrice: '0,24 € / analizi (-20%)',
+    badge: 'Najisplativije',
+    description: '25 dodatnih analiza nacrta i skica za veće projekte i gradilišta',
+  },
+};
+
 export function createInitialSubscription(): SubscriptionState {
   const now = new Date();
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
@@ -242,6 +263,7 @@ export function createInitialSubscription(): SubscriptionState {
     pricePerMonth: 0,
     aiAnalysesUsedThisMonth: 0,
     aiAnalysesLimit: PLANS_CONFIG.free.aiLimit,
+    extraAiAnalyses: 0,
     monthResetDate: nextMonth.toISOString(),
     autoRenew: true,
   };
@@ -288,6 +310,7 @@ export function loadSubscription(): SubscriptionState {
       pricePerMonth: config.price,
       aiAnalysesUsedThisMonth: aiUsed,
       aiAnalysesLimit: config.aiLimit,
+      extraAiAnalyses: typeof sub.extraAiAnalyses === 'number' ? sub.extraAiAnalyses : 0,
       monthResetDate: monthResetDate.toISOString(),
       subscriptionStartDate: sub.subscriptionStartDate || now.toISOString(),
       nextBillingDate: sub.nextBillingDate,
@@ -311,18 +334,74 @@ export function saveSubscription(sub: SubscriptionState): void {
 }
 
 export function getAiQuotaInfo(sub: SubscriptionState) {
-  const limit = sub.aiAnalysesLimit || PLANS_CONFIG[sub.plan]?.aiLimit || 2;
+  const baseLimit = sub.aiAnalysesLimit || PLANS_CONFIG[sub.plan]?.aiLimit || 2;
+  const extra = typeof sub.extraAiAnalyses === 'number' ? sub.extraAiAnalyses : 0;
+  const totalLimit = baseLimit + extra;
   const used = sub.aiAnalysesUsedThisMonth || 0;
-  const remaining = Math.max(0, limit - used);
-  const percentUsed = Math.min(100, Math.round((used / limit) * 100));
+  const remaining = Math.max(0, totalLimit - used);
+  const percentUsed = Math.min(100, Math.round((used / totalLimit) * 100));
 
   return {
     used,
-    limit,
+    baseLimit,
+    extra,
+    totalLimit,
+    limit: totalLimit,
     remaining,
     percentUsed,
     hasRemaining: remaining > 0,
   };
+}
+
+export function purchaseAddonPackage(
+  addonTier: AddonTier,
+  paymentMethod: SubscriptionState['paymentMethod'] = 'card',
+  companyDetails?: { name?: string; oib?: string }
+): { updatedSub: SubscriptionState; invoice: PaymentInvoice } {
+  const current = loadSubscription();
+  const addon = ADDON_PACKAGES[addonTier];
+  const now = new Date();
+
+  const currentExtra = typeof current.extraAiAnalyses === 'number' ? current.extraAiAnalyses : 0;
+  const updated: SubscriptionState = {
+    ...current,
+    extraAiAnalyses: currentExtra + addon.analysesCount,
+  };
+  saveSubscription(updated);
+
+  const invoice: PaymentInvoice = {
+    id: `inv-addon-${Date.now()}`,
+    invoiceNumber: `R1-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+    date: now.toISOString().split('T')[0],
+    amount: addon.price,
+    currency: 'EUR',
+    planName: `${addon.name} (${addon.analysesCount} AI analiza)`,
+    status: 'paid',
+    paymentMethod:
+      paymentMethod === 'google_pay'
+        ? 'Google Pay'
+        : paymentMethod === 'apple_pay'
+        ? 'Apple Pay'
+        : paymentMethod === 'bank_transfer'
+        ? 'Virman / Internet bankarstvo'
+        : 'Kreditna/Debitna kartica',
+  };
+
+  const existingInvoices = loadInvoices();
+  saveInvoices([invoice, ...existingInvoices]);
+
+  return { updatedSub: updated, invoice };
+}
+
+export function simulateAddExtraAiAnalyses(count: number): SubscriptionState {
+  const current = loadSubscription();
+  const currentExtra = typeof current.extraAiAnalyses === 'number' ? current.extraAiAnalyses : 0;
+  const updated: SubscriptionState = {
+    ...current,
+    extraAiAnalyses: currentExtra + count,
+  };
+  saveSubscription(updated);
+  return updated;
 }
 
 export function recordAiAnalysisUsage(): SubscriptionState {

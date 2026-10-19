@@ -193,6 +193,7 @@ export interface AISketchGuidelines {
 }
 
 export type PlanTier = 'free' | 'pro' | 'business';
+export type AddonTier = 'addon_10' | 'addon_25';
 
 export interface PlanConfig {
   id: PlanTier;
@@ -208,6 +209,16 @@ export interface PlanConfig {
   features: string[];
 }
 
+export interface AddonPackage {
+  id: AddonTier;
+  name: string;
+  analysesCount: number; // 10 ili 25
+  price: number; // 2.99 ili 5.99
+  unitPrice: string; // '0,30 €/analizi' ili '0,24 €/analizi'
+  badge?: string;
+  description: string;
+}
+
 export interface SubscriptionState {
   status: 'active' | 'trial' | 'expired';
   plan: PlanTier;
@@ -215,6 +226,7 @@ export interface SubscriptionState {
   pricePerMonth: number; // 0, 9.99 ili 19.99
   aiAnalysesUsedThisMonth: number;
   aiAnalysesLimit: number; // 2 (Free), 30 (Pro), 70 (Business)
+  extraAiAnalyses?: number; // Jednokratno kupljene dodatne analize (+10 ili +25)
   monthResetDate: string;
   subscriptionStartDate?: string;
   nextBillingDate?: string;

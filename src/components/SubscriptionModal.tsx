@@ -18,11 +18,16 @@ import {
   Briefcase,
   FileSpreadsheet,
   Image as ImageIcon,
+  PlusCircle,
+  Coins,
 } from 'lucide-react';
-import { SubscriptionState, PaymentInvoice, CraftsmanProfile, PlanTier } from '../types';
+import { SubscriptionState, PaymentInvoice, CraftsmanProfile, PlanTier, AddonTier } from '../types';
 import {
   PLANS_CONFIG,
+  ADDON_PACKAGES,
   activatePlan,
+  purchaseAddonPackage,
+  simulateAddExtraAiAnalyses,
   cancelSubscription,
   loadInvoices,
   resetAiQuota,
@@ -54,6 +59,7 @@ export const SubscriptionModal: React.FC<Props> = ({
   );
   const [selectedMethod, setSelectedMethod] = useState<'card' | 'google_pay' | 'bank_transfer'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [purchasingAddon, setPurchasingAddon] = useState<AddonTier | null>(null);
   const [activeTab, setActiveTab] = useState<'checkout' | 'invoices'>('checkout');
   const [notification, setNotification] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
 
@@ -119,6 +125,23 @@ export const SubscriptionModal: React.FC<Props> = ({
     showNotice('Automatsko obnavljanje paketa je isključeno.', 'info');
   };
 
+  const handleBuyAddon = (addonTier: AddonTier) => {
+    setPurchasingAddon(addonTier);
+    setTimeout(() => {
+      const { updatedSub, invoice } = purchaseAddonPackage(addonTier, selectedMethod, {
+        name: companyName || profile.companyName,
+        oib: oib || profile.oib,
+      });
+      onSubscriptionUpdated(updatedSub);
+      setPurchasingAddon(null);
+      const addon = ADDON_PACKAGES[addonTier];
+      showNotice(
+        `Uspješno kupljen ${addon.name} (+${addon.analysesCount} AI analiza za ${addon.price.toFixed(2)} €)! Račun ${invoice.invoiceNumber} je spreman.`,
+        'success'
+      );
+    }, 700);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
       <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl p-4 sm:p-7 text-slate-100 max-h-[92vh] overflow-y-auto">
@@ -171,7 +194,14 @@ export const SubscriptionModal: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>AI analize: <strong className="text-white">{quota.used}/{quota.limit}</strong></span>
+              <span>
+                AI analize: <strong className="text-white">{quota.used}/{quota.totalLimit}</strong>
+                {quota.extra > 0 && (
+                  <span className="text-emerald-400 font-bold ml-1">
+                    (+{quota.extra} kupljenih)
+                  </span>
+                )}
+              </span>
             </span>
           </div>
         </div>
@@ -630,12 +660,190 @@ export const SubscriptionModal: React.FC<Props> = ({
               </div>
             )}
 
+            {/* Dodatni paketi (Jednokratna kupnja bez pretplate) */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl text-amber-400">
+                    <PlusCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-white text-sm sm:text-base flex items-center gap-2">
+                      <span>Dodatni paketi AI analiza</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Jednokratno
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Trebate više analiza, a ne želite mijenjati mjesečni paket? Dodatne analize se odmah pribrajaju kvoti i <strong>ne ističu</strong> krajem mjeseca!
+                    </p>
+                  </div>
+                </div>
+
+                {quota.extra > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 shrink-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>+{quota.extra} dodatnih analiza aktivno</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Addon Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Dodatni paket 10 AI analiza */}
+                <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-4.5 flex flex-col justify-between transition group relative">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                        Dodatni paket
+                      </span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                        {ADDON_PACKAGES.addon_10.badge || 'Popularno'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <div className="text-2xl font-black text-white flex items-center gap-1">
+                          <span>10 AI analiza</span>
+                        </div>
+                        <span className="text-xs text-slate-400">{ADDON_PACKAGES.addon_10.unitPrice}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-amber-400">2,99 €</span>
+                        <span className="text-[10px] block text-slate-400">jednokratno</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-300">
+                      {ADDON_PACKAGES.addon_10.description}
+                    </p>
+
+                    <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>10 dodatnih analiza skica i nacrta</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Ne ističe krajem mjeseca (trajno)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Službeni R1 račun za trošak</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBuyAddon('addon_10')}
+                    disabled={purchasingAddon !== null}
+                    className="mt-4 w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {purchasingAddon === 'addon_10' ? (
+                      <span>Kupovina u tijeku...</span>
+                    ) : (
+                      <>
+                        <Coins className="w-4 h-4 text-amber-200" />
+                        <span>Kupi 10 analiza (2,99 €)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 2. Dodatni paket 25 AI analiza */}
+                <div className="bg-gradient-to-b from-amber-950/20 via-slate-900 to-slate-950 border border-amber-500/40 hover:border-amber-500 rounded-2xl p-4.5 flex flex-col justify-between transition group relative shadow-lg shadow-amber-950/20">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                        Dodatni paket
+                      </span>
+                      <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-sm">
+                        {ADDON_PACKAGES.addon_25.badge || 'Najisplativije'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <div className="text-2xl font-black text-white flex items-center gap-1">
+                          <span>25 AI analiza</span>
+                        </div>
+                        <span className="text-xs text-amber-300 font-semibold">{ADDON_PACKAGES.addon_25.unitPrice}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-amber-400">5,99 €</span>
+                        <span className="text-[10px] block text-slate-400">jednokratno</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-300">
+                      {ADDON_PACKAGES.addon_25.description}
+                    </p>
+
+                    <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80">
+                      <div className="flex items-center gap-2 font-semibold text-white">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>25 dodatnih analiza skica i nacrta</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Ne ističe krajem mjeseca (trajno)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Službeni R1 račun za trošak</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBuyAddon('addon_25')}
+                    disabled={purchasingAddon !== null}
+                    className="mt-4 w-full py-2.5 px-4 bg-gradient-to-r from-orange-600 via-amber-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-orange-600/30 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {purchasingAddon === 'addon_25' ? (
+                      <span>Kupovina u tijeku...</span>
+                    ) : (
+                      <>
+                        <Coins className="w-4 h-4 text-amber-200" />
+                        <span>Kupi 25 analiza (5,99 €)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Test simulator controls */}
             <div className="pt-2 border-t border-slate-800/80 bg-slate-950/40 p-3 rounded-xl text-[11px] text-slate-400 space-y-2">
               <span className="font-bold text-slate-300 block">
                 🧪 Testiranje paketa i AI kvota (Simulator):
               </span>
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = simulateAddExtraAiAnalyses(10);
+                    onSubscriptionUpdated(updated);
+                    showNotice('Simulirano: Dodano +10 dodatnih AI analiza.', 'success');
+                  }}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg border border-slate-700 font-semibold"
+                >
+                  +10 analiza (2,99 €)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = simulateAddExtraAiAnalyses(25);
+                    onSubscriptionUpdated(updated);
+                    showNotice('Simulirano: Dodano +25 dodatnih AI analiza.', 'success');
+                  }}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg border border-slate-700 font-semibold"
+                >
+                  +25 analiza (5,99 €)
+                </button>
                 <button
                   type="button"
                   onClick={() => {
