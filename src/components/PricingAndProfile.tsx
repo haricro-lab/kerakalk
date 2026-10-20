@@ -926,14 +926,14 @@ export const PricingAndProfile: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* R1 Invoices Section */}
+          {/* Invoices Section */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-base text-white flex items-center gap-2">
                 <Receipt className="w-4 h-4 text-orange-400" />
-                <span>Povijest R1 računa za pretplatu</span>
+                <span>Povijest računa za pretplatu</span>
               </h3>
-              <span className="text-xs text-slate-400">Priznati trošak u knjigovodstvu</span>
+              <span className="text-xs text-slate-400">Pregled plaćanja</span>
             </div>
 
             {loadInvoices().length > 0 ? (
@@ -957,7 +957,7 @@ export const PricingAndProfile: React.FC<Props> = ({
               </div>
             ) : (
               <p className="text-xs text-slate-500 italic">
-                Trenutno nema izdanih računa. Nakon aktivacije pretplate AI Pro ili AI Business ovdje će se nalaziti svi vaši R1 računi.
+                Trenutno nema izdanih računa. Nakon aktivacije pretplate AI Pro ili AI Business ovdje će se nalaziti svi vaši računi.
               </p>
             )}
           </div>

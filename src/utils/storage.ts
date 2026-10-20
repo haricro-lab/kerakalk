@@ -205,7 +205,6 @@ export const PLANS_CONFIG: Record<PlanTier, PlanConfig> = {
       'Spremanje i upravljanje do 25 projekata',
       'Slanje ponude na WhatsApp u 1 klik',
       'Proračun hidroizolacije, traka, gerunga i sokla',
-      'R1 račun za porezni trošak poslovanja',
     ],
   },
   business: {
@@ -226,7 +225,6 @@ export const PLANS_CONFIG: Record<PlanTier, PlanConfig> = {
       'Neograničen broj projekata i arhiva ponuda',
       'Prioritetna AI obrada skica i tlocrta',
       'Sigurnosni backup baze klijenata i ponuda',
-      'R1 račun za porezni odbitak obrta',
     ],
   },
 };
@@ -355,12 +353,10 @@ export function getAiQuotaInfo(sub: SubscriptionState) {
 
 export function purchaseAddonPackage(
   addonTier: AddonTier,
-  paymentMethod: SubscriptionState['paymentMethod'] = 'card',
-  companyDetails?: { name?: string; oib?: string }
-): { updatedSub: SubscriptionState; invoice: PaymentInvoice } {
+  paymentMethod: SubscriptionState['paymentMethod'] = 'card'
+): SubscriptionState {
   const current = loadSubscription();
   const addon = ADDON_PACKAGES[addonTier];
-  const now = new Date();
 
   const currentExtra = typeof current.extraAiAnalyses === 'number' ? current.extraAiAnalyses : 0;
   const updated: SubscriptionState = {
@@ -368,29 +364,7 @@ export function purchaseAddonPackage(
     extraAiAnalyses: currentExtra + addon.analysesCount,
   };
   saveSubscription(updated);
-
-  const invoice: PaymentInvoice = {
-    id: `inv-addon-${Date.now()}`,
-    invoiceNumber: `R1-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-    date: now.toISOString().split('T')[0],
-    amount: addon.price,
-    currency: 'EUR',
-    planName: `${addon.name} (${addon.analysesCount} AI analiza)`,
-    status: 'paid',
-    paymentMethod:
-      paymentMethod === 'google_pay'
-        ? 'Google Pay'
-        : paymentMethod === 'apple_pay'
-        ? 'Apple Pay'
-        : paymentMethod === 'bank_transfer'
-        ? 'Virman / Internet bankarstvo'
-        : 'Kreditna/Debitna kartica',
-  };
-
-  const existingInvoices = loadInvoices();
-  saveInvoices([invoice, ...existingInvoices]);
-
-  return { updatedSub: updated, invoice };
+  return updated;
 }
 
 export function simulateAddExtraAiAnalyses(count: number): SubscriptionState {
@@ -451,31 +425,6 @@ export function activatePlan(
   };
 
   saveSubscription(updated);
-
-  // Ako se plaća (iznos > 0), evidentiraj službeni R1 račun
-  if (amount > 0) {
-    const invoice: PaymentInvoice = {
-      id: `inv-${Date.now()}`,
-      invoiceNumber: `R1-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-      date: now.toISOString().split('T')[0],
-      amount,
-      currency: 'EUR',
-      planName: `${config.name} (${config.billingPeriod})`,
-      status: 'paid',
-      paymentMethod:
-        paymentMethod === 'google_pay'
-          ? 'Google Pay'
-          : paymentMethod === 'apple_pay'
-          ? 'Apple Pay'
-          : paymentMethod === 'bank_transfer'
-          ? 'Virman / Internet bankarstvo'
-          : 'Kreditna/Debitna kartica',
-    };
-
-    const existingInvoices = loadInvoices();
-    saveInvoices([invoice, ...existingInvoices]);
-  }
-
   return updated;
 }
 
@@ -554,18 +503,23 @@ export function loadOffers(): Offer[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.OFFERS);
     if (!raw) {
-      saveOffers(SAMPLE_OFFERS);
-      return SAMPLE_OFFERS;
+      return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : SAMPLE_OFFERS;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return SAMPLE_OFFERS;
+    return [];
   }
 }
 
 export function saveOffers(offers: Offer[]): void {
   localStorage.setItem(STORAGE_KEYS.OFFERS, JSON.stringify(offers));
+}
+
+export function resetAppData(): void {
+  localStorage.removeItem(STORAGE_KEYS.OFFERS);
+  localStorage.removeItem(STORAGE_KEYS.INVOICES);
+  localStorage.removeItem(STORAGE_KEYS.SUBSCRIPTION);
 }
 
 export function getNextOfferNumber(offers: Offer[]): string {

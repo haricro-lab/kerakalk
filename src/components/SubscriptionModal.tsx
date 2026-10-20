@@ -57,7 +57,7 @@ export const SubscriptionModal: React.FC<Props> = ({
   const [selectedPlan, setSelectedPlan] = useState<PlanTier>(
     subscription.plan === 'free' ? 'pro' : subscription.plan || initialPlan
   );
-  const [selectedMethod, setSelectedMethod] = useState<'card' | 'google_pay' | 'bank_transfer'>('card');
+  const [selectedMethod, setSelectedMethod] = useState<'card' | 'google_pay'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
   const [purchasingAddon, setPurchasingAddon] = useState<AddonTier | null>(null);
   const [activeTab, setActiveTab] = useState<'checkout' | 'invoices'>('checkout');
@@ -68,11 +68,6 @@ export const SubscriptionModal: React.FC<Props> = ({
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [cardName, setCardName] = useState(profile.ownerName || '');
-
-  // R1 invoice details
-  const [needR1, setNeedR1] = useState(true);
-  const [companyName, setCompanyName] = useState(profile.companyName || '');
-  const [oib, setOib] = useState(profile.oib || '');
 
   // Preview selected invoice
   const [selectedInvoice, setSelectedInvoice] = useState<PaymentInvoice | null>(null);
@@ -128,15 +123,12 @@ export const SubscriptionModal: React.FC<Props> = ({
   const handleBuyAddon = (addonTier: AddonTier) => {
     setPurchasingAddon(addonTier);
     setTimeout(() => {
-      const { updatedSub, invoice } = purchaseAddonPackage(addonTier, selectedMethod, {
-        name: companyName || profile.companyName,
-        oib: oib || profile.oib,
-      });
+      const updatedSub = purchaseAddonPackage(addonTier, selectedMethod);
       onSubscriptionUpdated(updatedSub);
       setPurchasingAddon(null);
       const addon = ADDON_PACKAGES[addonTier];
       showNotice(
-        `Uspješno kupljen ${addon.name} (+${addon.analysesCount} AI analiza za ${addon.price.toFixed(2)} €)! Račun ${invoice.invoiceNumber} je spreman.`,
+        `Uspješno kupljen ${addon.name} (+${addon.analysesCount} AI analiza za ${addon.price.toFixed(2)} €)!`,
         'success'
       );
     }, 700);
@@ -229,7 +221,7 @@ export const SubscriptionModal: React.FC<Props> = ({
             }`}
           >
             <Receipt className="w-4 h-4" />
-            <span>R1 Računi ({invoices.length})</span>
+            <span>Računi ({invoices.length})</span>
           </button>
         </div>
 
@@ -359,10 +351,6 @@ export const SubscriptionModal: React.FC<Props> = ({
                       <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                       <span>Slanje na WhatsApp u 1 klik</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>R1 račun za trošak obrta</span>
-                    </div>
                   </div>
                 </div>
 
@@ -432,10 +420,6 @@ export const SubscriptionModal: React.FC<Props> = ({
                       <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                       <span>Prioritetna AI obrada skica</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>R1 račun za porezni odbitak</span>
-                    </div>
                   </div>
                 </div>
 
@@ -476,7 +460,7 @@ export const SubscriptionModal: React.FC<Props> = ({
                 </div>
 
                 {/* Payment Methods */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setSelectedMethod('card')}
@@ -501,19 +485,6 @@ export const SubscriptionModal: React.FC<Props> = ({
                   >
                     <Smartphone className="w-5 h-5 text-emerald-400" />
                     <span>Google / Apple Pay</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMethod('bank_transfer')}
-                    className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 text-xs font-bold transition ${
-                      selectedMethod === 'bank_transfer'
-                        ? 'bg-orange-600/20 border-orange-500 text-white shadow-sm'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Building className="w-5 h-5 text-sky-400" />
-                    <span>Virman / Banka</span>
                   </button>
                 </div>
 
@@ -580,48 +551,9 @@ export const SubscriptionModal: React.FC<Props> = ({
                   </div>
                 )}
 
-                {selectedMethod === 'bank_transfer' && (
-                  <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-300 space-y-1.5 font-mono text-[11px]">
-                    <p className="font-sans font-bold text-white text-xs mb-1">Podaci za plaćanje virmanom / nalogom:</p>
-                    <p><span className="text-slate-400">Primatelj:</span> KeraKalk d.o.o. / AI Studio</p>
-                    <p><span className="text-slate-400">IBAN:</span> HR1223400091110022334</p>
-                    <p><span className="text-slate-400">Model:</span> HR00 | <span className="text-slate-400">Poziv na broj:</span> {profile.oib || '2026-10'}</p>
-                    <p><span className="text-slate-400">Iznos:</span> <strong className="text-white">{chosenConfig.price.toFixed(2)} EUR</strong></p>
-                    <p><span className="text-slate-400">Opis:</span> Mjesečna pretplata {chosenConfig.name}</p>
-                  </div>
-                )}
 
-                {/* R1 Invoice Details */}
-                <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-3 text-xs space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer font-semibold text-white">
-                    <input
-                      type="checkbox"
-                      checked={needR1}
-                      onChange={(e) => setNeedR1(e.target.checked)}
-                      className="w-4 h-4 text-orange-600 rounded bg-slate-800 border-slate-700"
-                    />
-                    <span>Trebam službeni R1 račun za obrt ili firmu (porezni odbitak)</span>
-                  </label>
 
-                  {needR1 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1.5">
-                      <input
-                        type="text"
-                        placeholder="Naziv obrta / tvrtke"
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder="OIB obrta (11 znamenki)"
-                        value={oib}
-                        onChange={(e) => setOib(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono"
-                      />
-                    </div>
-                  )}
-                </div>
+
 
                 {/* Submit Action */}
                 <button
@@ -728,10 +660,6 @@ export const SubscriptionModal: React.FC<Props> = ({
                         <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         <span>Ne ističe krajem mjeseca (trajno)</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span>Službeni R1 račun za trošak</span>
-                      </div>
                     </div>
                   </div>
 
@@ -790,9 +718,153 @@ export const SubscriptionModal: React.FC<Props> = ({
                         <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         <span>Ne ističe krajem mjeseca (trajno)</span>
                       </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBuyAddon('addon_25')}
+                    disabled={purchasingAddon !== null}
+                    className="mt-4 w-full py-2.5 px-4 bg-gradient-to-r from-orange-600 via-amber-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-orange-600/30 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {purchasingAddon === 'addon_25' ? (
+                      <span>Kupovina u tijeku...</span>
+                    ) : (
+                      <>
+                        <Coins className="w-4 h-4 text-amber-200" />
+                        <span>Kupi 25 analiza (5,99 €)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Dodatni paketi (Jednokratna kupnja bez pretplate) */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl text-amber-400">
+                    <PlusCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-white text-sm sm:text-base flex items-center gap-2">
+                      <span>Dodatni paketi AI analiza</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Jednokratno
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Trebate više analiza, a ne želite mijenjati mjesečni paket? Dodatne analize se odmah pribrajaju kvoti i <strong>ne ističu</strong> krajem mjeseca!
+                    </p>
+                  </div>
+                </div>
+
+                {quota.extra > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 shrink-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>+{quota.extra} dodatnih analiza aktivno</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Addon Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Dodatni paket 10 AI analiza */}
+                <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-4.5 flex flex-col justify-between transition group relative">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                        Dodatni paket
+                      </span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                        {ADDON_PACKAGES.addon_10.badge || 'Popularno'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <div className="text-2xl font-black text-white flex items-center gap-1">
+                          <span>10 AI analiza</span>
+                        </div>
+                        <span className="text-xs text-slate-400">{ADDON_PACKAGES.addon_10.unitPrice}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-amber-400">2,99 €</span>
+                        <span className="text-[10px] block text-slate-400">jednokratno</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-300">
+                      {ADDON_PACKAGES.addon_10.description}
+                    </p>
+
+                    <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80">
                       <div className="flex items-center gap-2">
                         <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span>Službeni R1 račun za trošak</span>
+                        <span>10 dodatnih analiza skica i nacrta</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Ne ističe krajem mjeseca (trajno)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBuyAddon('addon_10')}
+                    disabled={purchasingAddon !== null}
+                    className="mt-4 w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {purchasingAddon === 'addon_10' ? (
+                      <span>Kupovina u tijeku...</span>
+                    ) : (
+                      <>
+                        <Coins className="w-4 h-4 text-amber-200" />
+                        <span>Kupi 10 analiza (2,99 €)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 2. Dodatni paket 25 AI analiza */}
+                <div className="bg-gradient-to-b from-amber-950/20 via-slate-900 to-slate-950 border border-amber-500/40 hover:border-amber-500 rounded-2xl p-4.5 flex flex-col justify-between transition group relative shadow-lg shadow-amber-950/20">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                        Dodatni paket
+                      </span>
+                      <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-sm">
+                        {ADDON_PACKAGES.addon_25.badge || 'Najisplativije'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <div className="text-2xl font-black text-white flex items-center gap-1">
+                          <span>25 AI analiza</span>
+                        </div>
+                        <span className="text-xs text-amber-300 font-semibold">{ADDON_PACKAGES.addon_25.unitPrice}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-amber-400">5,99 €</span>
+                        <span className="text-[10px] block text-slate-400">jednokratno</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-300">
+                      {ADDON_PACKAGES.addon_25.description}
+                    </p>
+
+                    <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80">
+                      <div className="flex items-center gap-2 font-semibold text-white">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>25 dodatnih analiza skica i nacrta</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Ne ističe krajem mjeseca (trajno)</span>
                       </div>
                     </div>
                   </div>
@@ -907,8 +979,8 @@ export const SubscriptionModal: React.FC<Props> = ({
           /* Invoices Tab */
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-bold text-white text-sm">Povijest izdanih R1 računa za pretplatu</h4>
-              <span className="text-xs text-slate-400">Priznati poslovni trošak</span>
+              <h4 className="font-bold text-white text-sm">Povijest izdanih računa za pretplatu</h4>
+              <span className="text-xs text-slate-400">Pregled plaćanja</span>
             </div>
 
             {selectedInvoice ? (
@@ -934,7 +1006,7 @@ export const SubscriptionModal: React.FC<Props> = ({
                     <p className="text-slate-300">Zagreb, Hrvatska</p>
                   </div>
                   <div>
-                    <p className="text-slate-400">Kupac (R1):</p>
+                    <p className="text-slate-400">Kupac:</p>
                     <p className="font-bold text-white">{profile.companyName || 'Keramičarski Obrt'}</p>
                     <p className="text-slate-300">OIB: {profile.oib || 'Nije upisan'}</p>
                     <p className="text-slate-300">{profile.address}, {profile.city}</p>

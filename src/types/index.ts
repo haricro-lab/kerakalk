@@ -230,7 +230,7 @@ export interface SubscriptionState {
   monthResetDate: string;
   subscriptionStartDate?: string;
   nextBillingDate?: string;
-  paymentMethod?: 'card' | 'google_pay' | 'apple_pay' | 'bank_transfer';
+  paymentMethod?: 'card' | 'google_pay' | 'apple_pay';
   lastPaymentAmount?: number;
   autoRenew: boolean;
   trialStartDate?: string;
